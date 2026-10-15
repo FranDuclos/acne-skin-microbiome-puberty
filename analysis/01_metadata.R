@@ -62,3 +62,43 @@ s1 <- as_tibble(s1_matrix)
 
 stopifnot(nrow(s1) == 48, ncol(s1) == 11)
 
+s1 <- mutate(s1,
+             subject_id   = as.integer(str_remove(id, "S")),   
+             age          = as.integer(age),
+             sebum_mean   = as.numeric(sebum_mean),           
+             iga_score    = as.integer(na_if(iga_score, "n/a")), 
+             tanner_stage = paste0("T", tanner_stage)          
+)
+
+stopifnot(
+  !anyNA(s1$subject_id),
+  n_distinct(s1$subject_id) == 48,
+  !anyNA(s1$age),
+  !anyNA(s1$sebum_mean),
+  all(is.na(s1$iga_score) == (s1$status_acne == "Normal"))  # IGA vacío <=> piel normal
+)
+
+meta <- left_join(subjects, s1, by = "subject_id", suffix = c("_sra", "_s1"))
+
+stopifnot(
+  nrow(meta) == 48,
+  !anyNA(meta$age),
+  all(meta$tanner_stage_sra == meta$tanner_stage_s1),
+  all(meta$status_acne_sra == meta$status_acne_s1)
+)
+
+meta <- select(meta, -tanner_stage_s1, -status_acne_s1, -id)
+meta <- rename(meta, tanner_stage = tanner_stage_sra, status_acne = status_acne_sra)
+
+meta <- mutate(meta, puberty_group = if_else(tanner_stage %in% c("T1", "T2"), "early", "late"))
+
+stopifnot(
+  sum(meta$puberty_group == "early") == 21,
+  sum(meta$status_acne == "Normal") == 21
+)
+
+metadata <- bind_rows(meta, filter(sra, sample_type != "subject"))
+
+stopifnot(nrow(metadata) == 56)
+
+write_csv(metadata, here("data", "metadata", "metadata.csv"))
