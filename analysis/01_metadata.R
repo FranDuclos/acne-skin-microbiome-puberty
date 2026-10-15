@@ -3,6 +3,8 @@ library(dplyr)
 library(stringr)
 library(here)
 library(tidyr)
+library(pdftools)
+
 
 sra <- read_csv(here("data","metadata","SraRunTable.csv"), show_col_types = FALSE)
 
@@ -40,4 +42,23 @@ stopifnot(
   all(subjects$tanner_stage %in% c("T1", "T2", "T3", "T4", "T5"))
 )
 
+# PMC blocks d
+pdf_path <- here("data", "metadata", "schneider2022_supplement.pdf")
+stopifnot(file.exists(pdf_path))
+
+pages <- pdf_text(pdf_path)
+
+lines <- str_split(pages[11], "\n")[[1]]
+
+data_lines <- str_subset(str_trim(lines), "^S\\d{2}")
+
+s1_matrix <- str_split(data_lines, "\\s+", simplify = TRUE)
+
+colnames(s1_matrix) <- c("id", "age", "sex", "ethnicity", "hispanic_latino",
+                         "tanner_stage", "status_acne", "iga_score",
+                         "sebum_mean", "lotion", "makeup")
+
+s1 <- as_tibble(s1_matrix)
+
+stopifnot(nrow(s1) == 48, ncol(s1) == 11)
 

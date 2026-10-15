@@ -10,3 +10,6 @@ desktop.ini
 # FASTQ (viven en WSL)
 *.fastq.gz
 *.fq.gz
+
+# PDF
+*.pdf
