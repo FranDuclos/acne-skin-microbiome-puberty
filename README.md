@@ -29,11 +29,13 @@ The reasoning behind each step is documented in [`docs/`](docs/).
 | | |
 |---|---|
 | Source | NCBI SRA, BioProject [PRJNA856701](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA856701) |
-| Samples | 48 subjects, forehead swabs |
+| Samples | 56 runs: 48 subjects (forehead swabs) + 6 negative controls + 2 mock communities |
 | Sequencing | Illumina NextSeq, 2 × 150 bp paired-end shotgun |
-| Metadata | Acne status, Tanner stage, sebum (µg/cm²) |
+| Metadata | SRA run table + Table S1 of the supplement: age, sex, Tanner stage, acne status, IGA score, sebum (µg/cm²), lotion/make-up use |
 
 Raw FASTQ files are **not** included in this repository (size). Run accessions are listed in [`data/metadata/`](data/metadata/), and `workflow/` contains the scripts to download them.
+
+The sample metadata table ([`data/metadata/metadata.csv`](data/metadata/metadata.csv)) is built by [`analysis/01_metadata.R`](analysis/01_metadata.R), which joins the SRA run table with Table S1 by subject number and checks that Tanner stage and acne status agree between both sources. Table S1 is extracted from the [supplementary PDF](https://pmc.ncbi.nlm.nih.gov/articles/instance/11134479/bin/NIHMS1990790-supplement-Schneider_et_al_Supplemental.pdf), which is not redistributed here: download it manually (PMC blocks automated downloads) and save it as `data/metadata/schneider2022_supplement.pdf`.
 
 ## Pipeline
 
@@ -84,13 +86,14 @@ Results are not expected to match exactly: newer databases change both the taxon
 - **R packages:** pinned with [`renv`](https://rstudio.github.io/renv/) (`renv.lock`). Run `renv::restore()` to install them.
 - **Command-line tools:** pinned in a conda environment (`envs/`).
 - **Galaxy:** the workflow is exported to `workflow/galaxy/` and can be imported into any Galaxy server.
+- **Manual step:** the supplementary PDF must be downloaded by hand before running `01_metadata.R` (see [Data](#data)).
 
 ## Status / Roadmap
 
 **Block A — pilot (Oct–Dec 2026)**
 - [x] Repository setup
-- [ ] Sample metadata table
-- [ ] `renv` setup
+- [x] Sample metadata table
+- [x] `renv` setup
 - [ ] QC (FastQC)
 - [ ] Host DNA removal
 - [ ] Taxonomic profiling (MetaPhlAn 4)
