@@ -1,0 +1,8 @@
+name: pilot
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - sra-tools
+  - fastqc
+  - multiqc
