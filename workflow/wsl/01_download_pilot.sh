@@ -59,13 +59,74 @@ get_expected_spots() {
 }
 
 
-# ---- Check inputs (temporary: replaced by the download loop in the next step) ----
-# Print each run with its expected spots; stop if one has no value.
+# ---- Optional: process only some runs ----
+# Without arguments the script processes the 15 runs.
+# With arguments it processes only those (useful for testing), e.g.:
+#   bash workflow/wsl/01_download_pilot.sh SRR20028087
+if [ "$#" -gt 0 ]; then
+  RUNS=("$@")
+fi
+
+
+# ---- Check inputs before downloading anything ----
+# The SRA tools come from the conda env "pilot"
+if ! command -v prefetch > /dev/null || ! command -v fasterq-dump > /dev/null; then
+  echo "ERROR: prefetch/fasterq-dump not found. Run: conda activate pilot" >&2
+  exit 1
+fi
+
+# Every run must have an expected spots value (used later to check read counts)
 for run in "${RUNS[@]}"; do
-  expected=$(get_expected_spots "$run")
-  if [ -z "$expected" ]; then
+  if [ -z "$(get_expected_spots "$run")" ]; then
     echo "ERROR: no expected spots for $run" >&2
     exit 1
   fi
-  echo "$run $expected"
 done
+
+
+# ---- Process each run ----
+# A failed run is recorded and the script moves on to the next one.
+FAILED=()
+
+for run in "${RUNS[@]}"; do
+  run_dir="$DATA_DIR/$run"
+  echo "==== $run ===="
+
+  # a. Skip runs already finished and verified
+  if [ -f "$DATA_DIR/$run.done" ]; then
+    echo "Already done, skipping"
+    continue
+  fi
+
+  # b. Download the .sra into $DATA_DIR/<RUN>/
+  #    "if ! command" = if the command fails (exit code != 0)
+  if ! prefetch "$run" -O "$DATA_DIR"; then
+    FAILED+=("$run (prefetch)")
+    continue
+  fi
+
+  # c. Convert the .sra into paired FASTQ files
+  #    -S: split R1/R2 into <RUN>_1.fastq and <RUN>_2.fastq
+  #    -O: output folder
+  #    -t: temporary files folder; without it they go to the current folder,
+  #        which can be /mnt/c (slow) when the script is run from the repo
+  #    -f: overwrite FASTQ left by a previous run that stopped halfway
+  if ! fasterq-dump -S -f -O "$run_dir" -t "$run_dir" "$run_dir"; then
+    FAILED+=("$run (fasterq-dump)")
+    continue
+  fi
+
+  # d-f. Compress, check and clean up: next step
+  echo "Converted to FASTQ (compression and checks: not implemented yet)"
+done
+
+
+# ---- Summary ----
+echo
+if [ "${#FAILED[@]}" -eq 0 ]; then
+  echo "All runs processed without errors"
+else
+  echo "Failed runs:"
+  printf '  %s\n' "${FAILED[@]}"
+  exit 1
+fi
