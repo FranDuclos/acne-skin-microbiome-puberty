@@ -116,8 +116,59 @@ for run in "${RUNS[@]}"; do
     continue
   fi
 
-  # d-f. Compress, check and clean up: next step
-  echo "Converted to FASTQ (compression and checks: not implemented yet)"
+  r1="$run_dir/${run}_1.fastq"
+  r2="$run_dir/${run}_2.fastq"
+
+  # d. Compress R1 and R2
+  #    -k: keep the uncompressed FASTQ until the checks pass (deleted in step f)
+  #    -f: overwrite a .gz left by a previous run that stopped halfway
+  if ! gzip -k -f "$r1" "$r2"; then
+    FAILED+=("$run (gzip)")
+    continue
+  fi
+
+  # e. Check the compressed files
+  # e1. Integrity: gzip -t fails if a .gz is truncated or corrupted
+  if ! gzip -t "$r1.gz" "$r2.gz"; then
+    FAILED+=("$run (gzip -t)")
+    continue
+  fi
+
+  # e2. Count reads: a FASTQ record has 4 lines, so reads = lines / 4
+  #     zcat reads the .gz without writing an uncompressed copy to disk
+  lines_r1=$(zcat "$r1.gz" | wc -l)
+  lines_r2=$(zcat "$r2.gz" | wc -l)
+  reads_r1=$((lines_r1 / 4))
+  reads_r2=$((lines_r2 / 4))
+
+  # e3. R1 and R2 must have the same number of reads (paired data)
+  if [ "$reads_r1" -ne "$reads_r2" ]; then
+    FAILED+=("$run (R1 = $reads_r1 reads, R2 = $reads_r2 reads)")
+    continue
+  fi
+
+  # e4. Reads must be within 1% of the spots declared by NCBI.
+  #     Not exact: expected spots come from Bases / AvgSpotLen, and AvgSpotLen
+  #     is rounded. Bash only does integer math, so awk does the division.
+  expected=$(get_expected_spots "$run")
+  diff_pct=$(awk -v r="$reads_r1" -v e="$expected" 'BEGIN { printf "%.2f", (r - e) / e * 100 }')
+  echo "Reads: R1 = $reads_r1, R2 = $reads_r2, expected = $expected ($diff_pct%)"
+
+  if ! awk -v d="$diff_pct" 'BEGIN { exit !(d >= -1 && d <= 1) }'; then
+    FAILED+=("$run (reads differ $diff_pct% from expected)")
+    continue
+  fi
+
+  # f. All checks passed: clean up and mark the run as done
+  #    Deleted: the .sra, the uncompressed FASTQ and any fasterq-dump temp folder
+  if ! rm -rf "$run_dir/$run.sra" "$r1" "$r2" "$run_dir"/fasterq.tmp.*; then
+    FAILED+=("$run (cleanup)")
+    continue
+  fi
+
+  # The .done marker is created last: it only exists if every step worked
+  touch "$DATA_DIR/$run.done"
+  echo "Done"
 done
 
 
